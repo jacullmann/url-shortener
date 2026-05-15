@@ -14,7 +14,7 @@ import { Link2 } from '@lucide/vue'
         </span>
       </div>
       <span class="text-[length:--font-size-xs] text-[--color-ink-faint] font-mono">
-        fast & performant
+        fast & simple
       </span>
     </div>
   </nav>
