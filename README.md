@@ -15,8 +15,6 @@ cargo run
 # → http://localhost:3000
 ```
 
-On first run, sqlx creates `urls.db` and applies migrations automatically.
-
 **Run tests:**
 ```bash
 cargo test
