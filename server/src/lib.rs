@@ -162,12 +162,19 @@ mod tests {
     use super::*;
     use axum_test::TestServer;
     use serde_json::json;
-    use tower_governor::{governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor};
+
+    fn router_test(state: AppState) -> Router {
+        Router::new()
+            .route("/health", get(health))
+            .route("/shorten", post(shorten))
+            .route("/{id}", get(redirect))
+            .with_state(state)
+    }
 
     async fn test_server() -> TestServer {
         let db = SqlitePool::connect(":memory:").await.unwrap();
 
-        sqlx::migrate!("./migrations")
+        sqlx::migrate!("db/migrations")
             .run(&db)
             .await
             .unwrap();
@@ -177,14 +184,7 @@ mod tests {
             base_url: "http://localhost:3000".to_string(),
         };
 
-        let governor_conf = GovernorConfigBuilder::default()
-            .key_extractor(SmartIpKeyExtractor)
-            .per_second(u64::MAX / 2)
-            .burst_size(u32::MAX)
-            .finish()
-            .unwrap();
-
-        TestServer::new(router(state, governor_conf))
+        TestServer::new(router_test(state))
     }
 
     #[tokio::test]

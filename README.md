@@ -1,6 +1,6 @@
 # url-shortener
 
-Fast and minimal URL shortener. Rust backend and Vue.js client. Data is stored in memory via DashMap. No database required.
+Fast and minimal URL shortener. Rust backend and Vue.js client. URLs are persisted in SQLite.
 
 ---
 
@@ -10,34 +10,57 @@ Fast and minimal URL shortener. Rust backend and Vue.js client. Data is stored i
 
 ```bash
 cd server
-cp .env.example .env   # adjust PORT and BASE_URL if needed
+cp .env.example .env   # adjust variables as needed
 cargo run
 # → http://localhost:3000
+```
 
-cargo test # run tests for server
+On first run, sqlx creates `urls.db` and applies migrations automatically.
+
+**Run tests:**
+```bash
+cargo test
 ```
 
 **Environment variables** (`server/.env`):
 
-| Variable   | Default                    | Description                                 |
-|------------|----------------------------|---------------------------------------------|
-| `PORT`     | `3000`                     | Port the server listens on                  |
-| `BASE_URL` | `http://localhost:{PORT}`  | Prefix used when constructing short URLs    |
+| Variable                | Default/Recommendation  | Description                                          |
+|-------------------------|-------------------------|------------------------------------------------------|
+| `PORT`                  | `3000`                  | Port the server listens on                           |
+| `BASE_URL`              | `http://localhost:3000` | Prefix used when constructing short URLs             |
+| `DATABASE_URL`          | `sqlite:urls.db`        | SQLite database path                                 |
+| `RATE_LIMIT_PER_SECOND` | `1`                     | Token replenishment rate per IP (requests/second)    |
+| `RATE_LIMIT_BURST`      | `60`                    | Maximum burst size per IP                            |
 
 ### 2 – Client
 
 ```bash
 cd client
 pnpm install
+cp .env.example .env   # set BACKEND_URL if needed
 pnpm run dev
 # → http://localhost:5173
 ```
 
-Vite proxies `/shorten` and `/health` to `http://localhost:3000` during development, so no CORS configuration is needed.
+**Environment variables** (`client/.env`):
 
-## Notes
+| Variable       | Default                              | Description                        |
+|----------------|--------------------------------------|------------------------------------|
+| `BACKEND_URL`  | `http://localhost:3000`              | URL of the running backend server  |
 
-- **No persistence.** All shortened URLs live in memory and are lost on server restart. This is intentional for simplicity.
-- **No deduplication.** The same long URL gets a new ID on every `POST /shorten`.
 
----
+## Setup
+
+The server uses `sqlx` compile-time query checking. The query cache is committed under `server/.sqlx/` so that `cargo build` works without a running database.
+
+If you change SQL queries, regenerate the cache:
+
+```bash
+cd server
+sqlx database create
+sqlx migrate run
+export DATABASE_URL=sqlite:urls.db
+cargo sqlx prepare
+git add .sqlx/
+git commit -m "updated sqlx query cache"
+```

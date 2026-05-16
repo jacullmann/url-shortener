@@ -43,7 +43,7 @@ async fn main() -> Result<()> {
         .await
         .context("Failed to connect to SQLite")?;
 
-    sqlx::migrate!("./migrations")
+    sqlx::migrate!("db/migrations")
         .run(&db)
         .await
         .context("Failed to run migrations")?;

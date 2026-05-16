@@ -1,5 +1,8 @@
 target/
 .env
+urls.db
+urls.db-shm
+urls.db-wal
 
 node_modules/
 dist/
