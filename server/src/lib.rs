@@ -236,7 +236,7 @@ mod tests {
         let server = test_server().await;
         server
             .post("/shorten")
-            .json(&json!({ "url": "i-am-not-a-url" }))
+            .json(&json!({ "url": "not-url" }))
             .await
             .assert_status(StatusCode::UNPROCESSABLE_ENTITY);
     }
