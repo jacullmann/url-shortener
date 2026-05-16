@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, short_url, original_url FROM urls WHERE original_url = ?",
+  "query": "SELECT id, original_url FROM urls WHERE original_url = ?",
   "describe": {
     "columns": [
       {
@@ -9,13 +9,8 @@
         "type_info": "Text"
       },
       {
-        "name": "short_url",
-        "ordinal": 1,
-        "type_info": "Text"
-      },
-      {
         "name": "original_url",
-        "ordinal": 2,
+        "ordinal": 1,
         "type_info": "Text"
       }
     ],
@@ -24,9 +19,8 @@
     },
     "nullable": [
       false,
-      false,
       false
     ]
   },
-  "hash": "2af25eb3bcaee325da268f1fd90b67fd3bf56cd89fe4add45d9f06b5a54c47ee"
+  "hash": "572f5e1a15a5908bdd88a2d7d0f64c765ba396c450b5242fbefd80324e0923b4"
 }

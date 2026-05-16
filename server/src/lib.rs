@@ -62,6 +62,12 @@ pub struct AppState {
     pub base_url: String,
 }
 
+impl AppState {
+    fn build_short_url(&self, id: &str) -> String {
+        format!("{}/{}", self.base_url, id)
+    }
+}
+
 // POST /shorten
 async fn shorten(
     State(state): State<AppState>,
@@ -75,18 +81,19 @@ async fn shorten(
     }
 
     if let Some(row) = sqlx::query!(
-        r#"SELECT id, short_url, original_url FROM urls WHERE original_url = ?"#,
+        r#"SELECT id, original_url FROM urls WHERE original_url = ?"#,
         payload.url,
     )
     .fetch_optional(&state.db)
     .await?
     {
         tracing::info!(id = %row.id, "Returning existing short URL");
+        let short_url = state.build_short_url(&row.id);
         return Ok((
             StatusCode::OK,
             Json(ShortenResponse {
                 id: row.id,
-                short_url: row.short_url,
+                short_url,
                 original_url: row.original_url,
             }),
         ));
@@ -103,16 +110,15 @@ async fn shorten(
         tracing::warn!(id_candidate = %id_candidate, "ID collision – retrying");
     };
 
-    let short_url = format!("{}/{id}", state.base_url);
-
     sqlx::query!(
-        r#"INSERT INTO urls (id, short_url, original_url) VALUES (?, ?, ?)"#,
+        r#"INSERT INTO urls (id, original_url) VALUES (?, ?)"#,
         id,
-        short_url,
         payload.url,
     )
     .execute(&state.db)
     .await?;
+
+    let short_url = state.build_short_url(&id);
 
     tracing::info!(id = %id, url = %payload.url, "URL shortened");
 
@@ -174,10 +180,7 @@ mod tests {
     async fn test_server() -> TestServer {
         let db = SqlitePool::connect(":memory:").await.unwrap();
 
-        sqlx::migrate!("db/migrations")
-            .run(&db)
-            .await
-            .unwrap();
+        sqlx::migrate!("db/migrations").run(&db).await.unwrap();
 
         let state = AppState {
             db,
