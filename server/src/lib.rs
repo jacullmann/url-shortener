@@ -154,7 +154,7 @@ async fn redirect(
     Ok(Redirect::temporary(&row.original_url))
 }
 
-// GET /health – jetzt mit echtem DB-Ping.
+// GET /health
 async fn health(State(state): State<AppState>) -> Result<Json<serde_json::Value>, AppError> {
     sqlx::query_scalar::<_, i64>("SELECT 1")
         .fetch_one(&state.db)
