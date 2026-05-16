@@ -1,9 +1,11 @@
 use anyhow::{Context, Result};
+use axum::http::{HeaderValue, Method, header};
 use server::{AppState, router};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use std::net::SocketAddr;
 use std::str::FromStr;
 use tower_governor::{governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor};
+use tower_http::cors::CorsLayer;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -33,6 +35,8 @@ async fn main() -> Result<()> {
         .and_then(|v| v.parse::<u32>().ok())
         .unwrap_or(60);
 
+    let cors = build_cors_layer();
+
     let connect_options = SqliteConnectOptions::from_str(&database_url)?
         .create_if_missing(true)
         .journal_mode(SqliteJournalMode::Wal);
@@ -57,7 +61,7 @@ async fn main() -> Result<()> {
         .finish()
         .expect("Invalid governor config");
 
-    let app = router(state, governor_conf);
+    let app = router(state, governor_conf, cors);
 
     let addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&addr)
@@ -74,4 +78,27 @@ async fn main() -> Result<()> {
     .context("Server error")?;
 
     Ok(())
+}
+
+fn build_cors_layer() -> CorsLayer {
+    let origin = std::env::var("CORS_ORIGIN").unwrap_or_default();
+
+    if origin.is_empty() {
+        tracing::warn!("CORS_ORIGIN not set – CORS disabled");
+        return CorsLayer::new();
+    }
+
+    match origin.parse::<HeaderValue>() {
+        Ok(value) => {
+            tracing::info!(origin = %origin, "CORS configured");
+            CorsLayer::new()
+                .allow_origin(value)
+                .allow_methods([Method::GET, Method::POST])
+                .allow_headers([header::CONTENT_TYPE])
+        }
+        Err(_) => {
+            tracing::error!(origin = %origin, "Invalid CORS_ORIGIN – CORS disabled");
+            CorsLayer::new()
+        }
+    }
 }

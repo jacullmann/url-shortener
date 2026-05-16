@@ -1,0 +1,11 @@
+target/
+.env
+.env.*
+!.env.example
+urls.db
+urls.db-shm
+urls.db-wal
+.cargo/
+.sqlx/
+.git/
+.gitignore

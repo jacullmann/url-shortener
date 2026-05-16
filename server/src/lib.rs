@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use thiserror::Error;
 use tower_governor::{GovernorLayer, governor::GovernorConfig, key_extractor::SmartIpKeyExtractor};
+use tower_http::cors::CorsLayer;
 use url::Url;
 
 #[derive(Debug, Error)]
@@ -21,6 +22,9 @@ pub enum AppError {
     #[error("Invalid URL: {0}")]
     InvalidUrl(String),
 
+    #[error("Service unavailable")]
+    ServiceUnavailable,
+
     #[error("Internal error")]
     Internal(#[from] sqlx::Error),
 }
@@ -30,6 +34,7 @@ impl IntoResponse for AppError {
         let (status, message) = match &self {
             AppError::NotFound(_) => (StatusCode::NOT_FOUND, self.to_string()),
             AppError::InvalidUrl(_) => (StatusCode::UNPROCESSABLE_ENTITY, self.to_string()),
+            AppError::ServiceUnavailable => (StatusCode::SERVICE_UNAVAILABLE, self.to_string()),
             AppError::Internal(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Internal server error".to_string(),
@@ -73,16 +78,19 @@ async fn shorten(
     State(state): State<AppState>,
     Json(payload): Json<ShortenRequest>,
 ) -> Result<(StatusCode, Json<ShortenResponse>), AppError> {
-    let parsed = Url::parse(&payload.url).map_err(|_| AppError::InvalidUrl(payload.url.clone()))?;
+    let parsed_url =
+        Url::parse(&payload.url).map_err(|_| AppError::InvalidUrl(payload.url.clone()))?;
 
-    match parsed.scheme() {
+    match parsed_url.scheme() {
         "http" | "https" => {}
         _ => return Err(AppError::InvalidUrl(payload.url)),
     }
 
+    let url = parsed_url.to_string();
+
     if let Some(row) = sqlx::query!(
         r#"SELECT id, original_url FROM urls WHERE original_url = ?"#,
-        payload.url,
+        url,
     )
     .fetch_optional(&state.db)
     .await?
@@ -113,21 +121,21 @@ async fn shorten(
     sqlx::query!(
         r#"INSERT INTO urls (id, original_url) VALUES (?, ?)"#,
         id,
-        payload.url,
+        url,
     )
     .execute(&state.db)
     .await?;
 
     let short_url = state.build_short_url(&id);
 
-    tracing::info!(id = %id, url = %payload.url, "URL shortened");
+    tracing::info!(id = %id, url = %url, "URL shortened");
 
     Ok((
         StatusCode::CREATED,
         Json(ShortenResponse {
             id,
             short_url,
-            original_url: payload.url,
+            original_url: url,
         }),
     ))
 }
@@ -146,20 +154,30 @@ async fn redirect(
     Ok(Redirect::temporary(&row.original_url))
 }
 
-// GET /health
-async fn health() -> Json<serde_json::Value> {
-    Json(serde_json::json!({ "status": "ok" }))
+// GET /health – jetzt mit echtem DB-Ping.
+async fn health(State(state): State<AppState>) -> Result<Json<serde_json::Value>, AppError> {
+    sqlx::query_scalar::<_, i64>("SELECT 1")
+        .fetch_one(&state.db)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "Health check DB ping failed");
+            AppError::ServiceUnavailable
+        })?;
+
+    Ok(Json(serde_json::json!({ "status": "ok" })))
 }
 
 pub fn router(
     state: AppState,
     governor_conf: GovernorConfig<SmartIpKeyExtractor, NoOpMiddleware>,
+    cors: CorsLayer,
 ) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/shorten", post(shorten))
         .route("/{id}", get(redirect))
         .layer(GovernorLayer::new(governor_conf))
+        .layer(cors)
         .with_state(state)
 }
 
@@ -179,14 +197,11 @@ mod tests {
 
     async fn test_server() -> TestServer {
         let db = SqlitePool::connect(":memory:").await.unwrap();
-
         sqlx::migrate!("db/migrations").run(&db).await.unwrap();
-
         let state = AppState {
             db,
             base_url: "http://localhost:3000".to_string(),
         };
-
         TestServer::new(router_test(state))
     }
 
@@ -207,7 +222,7 @@ mod tests {
         response.assert_status(StatusCode::CREATED);
 
         let body: ShortenResponse = response.json();
-        assert_eq!(body.original_url, "https://example.com");
+        assert_eq!(body.original_url, "https://example.com/");
         assert!(!body.id.is_empty());
     }
 
@@ -228,7 +243,6 @@ mod tests {
             .json();
 
         assert_eq!(first.id, second.id);
-        assert_eq!(first.short_url, second.short_url);
     }
 
     #[tokio::test]
@@ -237,6 +251,16 @@ mod tests {
         server
             .post("/shorten")
             .json(&json!({ "url": "no-url" }))
+            .await
+            .assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[tokio::test]
+    async fn shorten_ftp_returns_422() {
+        let server = test_server().await;
+        server
+            .post("/shorten")
+            .json(&json!({ "url": "ftp://example.com" }))
             .await
             .assert_status(StatusCode::UNPROCESSABLE_ENTITY);
     }
