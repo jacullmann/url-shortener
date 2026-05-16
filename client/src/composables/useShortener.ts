@@ -3,6 +3,16 @@ import { useClipboard } from '@vueuse/core'
 import { shortenUrl, extractErrorMessage } from '@/api/shortener'
 import type { ShortenResponse } from '@/types'
 
+function isValidUrl(input: string): boolean {
+    let parsed: URL
+    try {
+        parsed = new URL(input)
+    } catch {
+        return false
+    }
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+}
+
 export function useShortener() {
     const inputUrl = ref('')
     const isLoading = ref(false)
@@ -14,6 +24,12 @@ export function useShortener() {
     async function submit(): Promise<void> {
         const url = inputUrl.value.trim()
         if (!url) return
+
+        if (!isValidUrl(url)) {
+            errorMessage.value = 'Please enter a valid URL'
+            result.value = null
+            return
+        }
 
         isLoading.value = true
         errorMessage.value = null

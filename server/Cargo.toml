@@ -33,5 +33,7 @@ tower_governor = { version = "0.8", features = ["axum"]}
 
 governor = "0.10"
 
+tower-http = { version = "0.6", features = ["cors"] }
+
 [dev-dependencies]
 axum-test = "20"
