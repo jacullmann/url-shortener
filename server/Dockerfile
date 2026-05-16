@@ -2,6 +2,8 @@ FROM rust:1.95-slim AS builder
 
 WORKDIR /app
 
+ENV SQLX_OFFLINE=true
+
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
