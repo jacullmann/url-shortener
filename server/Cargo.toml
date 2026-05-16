@@ -7,9 +7,9 @@ edition = "2024"
 
 axum = "0.8"
 
-tokio = { version = "1.52", features = ["full"]}
+tokio = { version = "1.52", features = ["full"] }
 
-serde = { version = "1", features = ["derive"]}
+serde = { version = "1", features = ["derive"] }
 
 serde_json = "1"
 
@@ -21,13 +21,17 @@ anyhow = "1"
 
 tracing = "0.1"
 
-tracing-subscriber = { version = "0.3", features = ["env-filter"]}
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 url = "2.5"
 
-dashmap = "6"
-
 dotenvy = "0.15"
+
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "migrate"] }
+
+tower_governor = { version = "0.8", features = ["axum"]}
+
+governor = "0.10"
 
 [dev-dependencies]
 axum-test = "20"
